@@ -272,6 +272,8 @@ class Server:
         except NoClientNameMatchIDException as ex:
             logging.error(ex)
             client_state.set_srv_code(Outgoing_res.RECONNECT_FAILED.value)
+            if client_state.cl_id and not client_state.cl_id_binary:
+                client_state.set_cl_id_binary()
             client_state.set_srv_payload_data(client_state.cl_id_binary)
         except Exception as ex:
             logging.error(f"Error while processing AES/RSA keys due to {ex}")
@@ -297,12 +299,11 @@ class Server:
                                                                         File_Handling_locs_sizes.FILE_NAME_SIZE.value:]
             aes_cipher = AES.new(client_state.aes_key, AES.MODE_CBC, iv=bytes(16))
             file_content = unpad(aes_cipher.decrypt(encrypted_file_content), AES.block_size)
-            file_content_str = utils.remove_null_character(file_content.decode('utf-8'))
             path_to_save_file = os.path.join(os.path.dirname(__file__), FILES_RECEIVED_DIR, client_state.cl_id, client_state.file_name)
             directory = os.path.dirname(path_to_save_file)
             os.makedirs(directory, exist_ok=True)
-            with open(path_to_save_file, 'w') as file:
-                file.write(file_content_str)
+            with open(path_to_save_file, 'wb') as file:
+                file.write(file_content)
 
             # add record in db for the new file
             self.db.add_file(client_state.cl_id, client_state.file_name, path_to_save_file)
@@ -311,11 +312,7 @@ class Server:
             crc = int(checksum_list[0])
             # Set all values for response
             client_state.set_srv_code(Outgoing_res.RECEIVED_FILE_OK_CRC.value)
-            aes_cipher = AES.new(client_state.aes_key, AES.MODE_CBC, iv=bytes(16))
-            with open(path_to_save_file, 'r') as file:
-                file_content_to_encrypt = file.read()
-            file_content_to_encrypte_byte = file_content_to_encrypt.encode('utf-8')
-            content_file_size_byte = utils.to_little_endian(len(aes_cipher.encrypt(pad(file_content_to_encrypte_byte, AES.block_size))), Protocol_sizes.CONTENT_FILE_SIZE_IN_PROTOCAL.value)
+            content_file_size_byte = utils.to_little_endian(len(encrypted_file_content), Protocol_sizes.CONTENT_FILE_SIZE_IN_PROTOCAL.value)
             crc_bytes = utils.to_little_endian(crc, Protocol_sizes.CRC_SIZE_IN_PROTOCAL.value)
             
             client_state.set_srv_payload_data(client_state.cl_id_binary, content_file_size_byte, file_name_bytes, crc_bytes)    

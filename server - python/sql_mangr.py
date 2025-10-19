@@ -22,8 +22,7 @@ class DbManager:
         logging.info("Loading Database")
         self.connection = sqlite3.connect(DB_NAME, check_same_thread=False)
         self.cursor = self.connection.cursor()
-        if not os.path.exists(db_name):
-            self.create_db()
+        self.create_db()
         self.lock = threading.Lock()
         
     def create_db(self) -> None:
